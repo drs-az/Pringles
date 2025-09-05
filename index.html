@@ -31,7 +31,6 @@
       touch-action:manipulation; -webkit-tap-highlight-color: transparent; position:relative;
     }
     .chip{width:min(78vw,420px); filter:var(--chip-shadow); display:block; will-change:transform}
-    /* Crunch pop */
     .pop{animation:pop .14s ease-out}
     @keyframes pop{0%{transform:scale(1)}70%{transform:scale(0.94) rotate(-1deg)}100%{transform:scale(1)}}
     .stats{margin:6px 2px 10px; display:grid; gap:8px}
@@ -59,8 +58,6 @@
     button.primary{background:var(--accent); color:#161616; border-color:#f2c35e}
     footer{margin-top:10px; color:#9a9aa0; font-size:13px; text-align:center}
     .tiny{font-size:12px;color:#a7a7a7}
-
-    /* Toast + badges */
     .toast{
       position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
       background:#121317; border:1px solid #2b2c34; color:#e7ffe7; padding:10px 14px; border-radius:12px; 
@@ -219,7 +216,7 @@
       }
     }
 
-    // --- Crunch sound via Web Audio API (inline, no files) ---
+    // --- Crunch sound via Web Audio API (layered snap) ---
     let AC = null;
     function ensureAudio() {
       if (!AC) {
@@ -230,24 +227,54 @@
     }
     function playCrunch() {
       if (!AC) return;
-      const dur = 0.18, sr = AC.sampleRate, frames = Math.floor(sr * dur);
-      const buf = AC.createBuffer(1, frames, sr);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < frames; i++) {
-        let v = (Math.random() * 2 - 1) * 1.2; // clipped white noise
-        data[i] = Math.max(-1, Math.min(1, v));
+
+      const now = AC.currentTime;
+
+      // Layer 1: white-noise burst (body)
+      const dur1 = 0.16;
+      const src1 = noiseSource(dur1);
+      const bp1 = AC.createBiquadFilter(); bp1.type='bandpass'; bp1.frequency.value=2500; bp1.Q.value=1.2;
+      const hp1 = AC.createBiquadFilter(); hp1.type='highpass'; hp1.frequency.value=700;
+      const g1  = envGain(now, 0.001, 0.9, 0.012, dur1); // fast attack/decay
+      src1.connect(bp1); bp1.connect(hp1); hp1.connect(g1); g1.connect(AC.destination);
+      src1.start(now); src1.stop(now+dur1+0.02);
+
+      // Layer 2: shorter, brighter snap
+      const dur2 = 0.07;
+      const src2 = noiseSource(dur2);
+      const bp2 = AC.createBiquadFilter(); bp2.type='bandpass'; bp2.frequency.value=4200; bp2.Q.value=1.8;
+      const g2  = envGain(now, 0.001, 0.6, 0.006, dur2);
+      src2.connect(bp2); bp2.connect(g2); g2.connect(AC.destination);
+      src2.start(now); src2.stop(now+dur2+0.02);
+
+      // Layer 3: tiny click (osc transient) for initial bite
+      const osc = AC.createOscillator(); osc.type='triangle'; osc.frequency.setValueAtTime(3200, now);
+      const g3  = AC.createGain(); g3.gain.setValueAtTime(0.001, now);
+      g3.gain.exponentialRampToValueAtTime(0.2, now + 0.003);
+      g3.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      osc.connect(g3); g3.connect(AC.destination);
+      osc.start(now); osc.stop(now + 0.06);
+
+      // Helpers
+      function noiseSource(dur){
+        const frames = Math.floor(AC.sampleRate * dur);
+        const buf = AC.createBuffer(1, frames, AC.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i=0;i<frames;i++){
+          let v = (Math.random()*2-1)*1.25;
+          data[i] = Math.max(-1, Math.min(1, v));
+        }
+        const src = AC.createBufferSource(); src.buffer = buf; return src;
       }
-      const src = AC.createBufferSource(); src.buffer = buf;
-      const bp = AC.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2200; bp.Q.value = 1.4;
-      const hp = AC.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 600;
-      const gain = AC.createGain(); const now = AC.currentTime;
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.7, now + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-      src.connect(bp); bp.connect(hp); hp.connect(gain); gain.connect(AC.destination);
-      src.start(now); src.stop(now + dur + 0.02);
+      function envGain(t0, start, peak, attack, totalDur){
+        const g = AC.createGain();
+        g.gain.setValueAtTime(start, t0);
+        g.gain.exponentialRampToValueAtTime(peak, t0 + attack);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + totalDur);
+        return g;
+      }
     }
-    // unlock audio on first user gesture (mobile autoplay policy)
+    // unlock audio on first user gesture
     document.addEventListener('pointerdown', ensureAudio, { once: true });
 
     // Interactions
@@ -270,7 +297,7 @@
       if (e.code === 'Space' || e.code === 'Enter'){ e.preventDefault(); $('#chipBtn').click(); }
     });
 
-    // --- Share: create PNG card and share (fallback to download or text) ---
+    // --- Share: robust PNG layout that always fits ---
     $('#shareBtn').addEventListener('click', async () => {
       const d = new Date();
       const title = `Pringle 1, 2, 3 — ${d.toLocaleDateString()}`;
@@ -287,23 +314,62 @@
       }
     });
 
+    // NEW: computes layout to prevent overflow regardless of pringle.png aspect
     async function buildShareCard(title){
-      const w = 1200, h = 630;
+      const w = 1200, h = 630, pad = 48;
       const c = document.createElement('canvas'); c.width = w; c.height = h;
       const ctx = c.getContext('2d');
+
+      // background + panel
       const g = ctx.createLinearGradient(0,0,0,h);
       g.addColorStop(0,'#151518'); g.addColorStop(1,'#0b0b0c');
       ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
-      ctx.fillStyle = '#0e0f12'; roundRect(ctx, 48, 48, w-96, h-96, 28); ctx.fill(); ctx.strokeStyle = '#23242c'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = '#fafafa'; ctx.font = '700 44px system-ui, Segoe UI, Roboto'; ctx.fillText(title, 72, 110);
-      const chip = await loadImage('./pringle.png'); const chipW = 420; const chipH = chip.height * (chipW / chip.width);
-      ctx.drawImage(chip, 72, 140, chipW, chipH);
-      ctx.font = '600 32px system-ui, Segoe UI, Roboto'; ctx.fillText(`Pringles: ${count}`, 72, 140 + chipH + 60);
-      ctx.fillStyle = '#ffd991'; ctx.font = '600 28px system-ui, Segoe UI, Roboto';
-      ctx.fillText(`Calories: ${fmt(count*CAL_PER,1)} kcal  (${fmt(count*CAL_PCT,2)}%)`, 72, 140 + chipH + 110);
-      ctx.fillText(`Sodium: ${fmt(count*SOD_MG,1)} mg  (${fmt(count*SOD_PCT,2)}%)`, 72, 140 + chipH + 150);
+      const panelX = pad, panelY = pad, panelW = w - pad*2, panelH = h - pad*2;
+      ctx.fillStyle = '#0e0f12';
+      roundRect(ctx, panelX, panelY, panelW, panelH, 28); ctx.fill();
+      ctx.strokeStyle = '#23242c'; ctx.lineWidth = 2; ctx.stroke();
+
+      // title
+      ctx.fillStyle = '#fafafa';
+      ctx.font = '700 64px system-ui, Segoe UI, Roboto';
+      const titleY = panelY + 72; // baseline
+      ctx.fillText(title, panelX + 24, titleY);
+
+      // space budgeting
+      const gap = 26;
+      const statsLines = 3;
+      const statsBlockH = 42 * statsLines + 6; // text size ~32..34 + spacing
+      const chipAreaTop = titleY + gap;
+      const chipAreaBottom = panelY + panelH - gap - statsBlockH - 10;
+      const chipAreaH = Math.max(120, chipAreaBottom - chipAreaTop);
+      const chipAreaW = panelW - 48;
+
+      // chip
+      const chip = await loadImage('./pringle.png');
+      const scale = Math.min(chipAreaW / chip.width, chipAreaH / chip.height, 1.0);
+      const chipW = Math.floor(chip.width * scale);
+      const chipH = Math.floor(chip.height * scale);
+      const chipX = panelX + Math.floor((panelW - chipW)/2);
+      const chipY = chipAreaTop + Math.floor((chipAreaH - chipH)/2);
+      ctx.drawImage(chip, chipX, chipY, chipW, chipH);
+
+      // stats
+      const sX = panelX + 24;
+      let sY = chipAreaBottom + 44; // comfortably above bottom
+      ctx.fillStyle = '#fafafa';
+      ctx.font = '600 40px system-ui, Segoe UI, Roboto';
+      ctx.fillText(`Pringles: ${count}`, sX, sY);
+
+      ctx.fillStyle = '#ffd991';
+      ctx.font = '600 34px system-ui, Segoe UI, Roboto';
+      sY += 46;
+      ctx.fillText(`Calories: ${fmt(count*CAL_PER,1)} kcal  (${fmt(count*CAL_PCT,2)}%)`, sX, sY);
+      sY += 46;
+      ctx.fillText(`Sodium: ${fmt(count*SOD_MG,1)} mg  (${fmt(count*SOD_PCT,2)}%)`, sX, sY);
+
       return await new Promise(res => c.toBlob(res, 'image/png'));
     }
+
     function roundRect(ctx, x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
     function loadImage(src){ return new Promise((ok,err)=>{ const im=new Image(); im.onload=()=>ok(im); im.onerror=err; im.src=src; }); }
     function downloadBlob(blob, filename){
@@ -321,12 +387,12 @@
       const ctx = c.getContext('2d');
       ctx.fillStyle = '#0b0b0c'; ctx.fillRect(0,0,size,size);
       const scale = Math.min(size / img.width, size / img.height);
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const x = Math.round((size - w)/2);
-      const y = Math.round((size - h)/2);
+      const w2 = Math.round(img.width * scale);
+      const h2 = Math.round(img.height * scale);
+      const x = Math.round((size - w2)/2);
+      const y = Math.round((size - h2)/2);
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, x, y, w, h);
+      ctx.drawImage(img, x, y, w2, h2);
       return c.toDataURL('image/png');
     }
     async function injectManifestFromPringle(){
@@ -359,7 +425,7 @@
     function registerSW(){
       if(!('serviceWorker' in navigator)) return;
       const swCode = `
-        const CACHE = 'p123-v6';
+        const CACHE = 'p123-v7';
         const toCache = ['./', './pringle.png'];
         self.addEventListener('install', e => {
           e.waitUntil(caches.open(CACHE).then(c => c.addAll(toCache)));
