@@ -1,0 +1,12 @@
+{
+  "name": "Pringle 1, 2, 3",
+  "short_name": "Pringle123",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b0b0c",
+  "theme_color": "#ffcc66",
+  "icons": [
+    { "src": "./pringle.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./pringle.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

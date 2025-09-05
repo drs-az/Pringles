@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#ffcc66" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Pringle123" />
+  <link rel="apple-touch-icon" href="pringle.png" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <title>Pringle 1, 2, 3</title>
+  <style>
+    :root{--bg:#0b0b0c;--panel:#151518;--ink:#fafafa;--muted:#bdbdbd;--accent:#ffcc66;--accent2:#ffd991;--ok:#7bffb5}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 1200px at 50% -200px,#1b1b1f 0,#0b0b0c 65%);color:var(--ink);
+         font:500 16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+         display:flex;align-items:center;justify-content:center;padding:22px}
+    .app{width:min(820px,100%);background:var(--panel);border:1px solid #22232a;border-radius:22px;padding:20px 18px 16px;
+         box-shadow:0 30px 80px rgba(0,0,0,.45);position:relative;overflow:hidden}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+    h1{margin:0;font-size:22px}
+    .muted{color:var(--muted)}
+    .chip-wrap{display:grid;place-items:center;padding:10px 0 2px}
+    .chip-btn{appearance:none;background:none;border:0;cursor:pointer;padding:0;transition:transform .08s ease-out;touch-action:manipulation}
+    .chip-btn:active{transform:scale(.975) rotate(-.3deg)}
+    .chip{width:min(78vw,420px);filter:drop-shadow(0 14px 22px rgba(0,0,0,.55)) drop-shadow(0 2px 4px rgba(0,0,0,.35));display:block}
+    .stats{margin:6px 2px 10px;display:grid;gap:8px}
+    .card{background:#0e0f12;border:1px solid #23242c;border-radius:16px;padding:12px 14px;display:grid;gap:8px}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .controls{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center}
+    button.ctrl{background:#1a1b21;color:#fff;border:1px solid #2c2d36;padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:600}
+    button.primary{background:var(--accent);color:#161616;border-color:#f2c35e}
+    footer{margin-top:10px;color:#9a9aa0;font-size:13px;text-align:center}
+    .tiny{font-size:12px;color:#a7a7a7}
+    #fxCanvas{position:absolute;inset:0;pointer-events:none}
+    .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#121317;border:1px solid #2b2c34;
+      color:#e7ffe7;padding:10px 14px;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.4);display:none;z-index:10}
+    .toast.show{display:block}
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <h1>Pringle 1, 2, 3</h1>
+      <div class="muted tiny">Tap the chip to add one</div>
+    </header>
+
+    <div class="chip-wrap">
+      <button id="chipBtn" class="chip-btn" aria-label="Add one Pringle">
+        <img src="pringle.png" class="chip" alt="Pringle chip"/>
+      </button>
+    </div>
+
+    <section class="stats">
+      <div class="card">
+        <div class="row"><div>Pringles eaten</div><strong id="count">0</strong></div>
+        <div>Calories (10.7 each): <strong id="calories">0.0</strong> kcal</div>
+        <div>Sodium (12.9 mg each): <strong id="sodium">0.0</strong> mg</div>
+      </div>
+      <div class="controls">
+        <button id="undoBtn" class="ctrl">−1</button>
+        <button id="resetBtn" class="ctrl">Reset</button>
+        <button id="shareBtn" class="ctrl">Share</button>
+        <button id="installBtn" class="ctrl primary" hidden>Install App</button>
+        <span class="tiny" id="hint" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <footer>Works offline. Progress is saved automatically.</footer>
+    <div class="toast" id="toast"></div>
+    <canvas id="fxCanvas"></canvas>
+  </div>
+
+  <script>
+    // --- constants
+    const CAL_PER=10.7, SOD_MG=12.9;
+    const $=s=>document.querySelector(s);
+    const els={count:$('#count'),cal:$('#calories'),sod:$('#sodium'),chip:$('.chip'),fx:$('#fxCanvas'),
+      installBtn:$('#installBtn'),toast:$('#toast'),hint:$('#hint'),app:$('#app')};
+
+    // state
+    let count=Number(localStorage.getItem('p123_count')||0);
+    function update(){els.count.textContent=count; els.cal.textContent=(count*CAL_PER).toFixed(1);
+      els.sod.textContent=(count*SOD_MG).toFixed(1); localStorage.setItem('p123_count',String(count));}
+    update();
+
+    // interactions
+    $('#chipBtn').addEventListener('click',()=>{count++; update(); crunch(); confetti();});
+    $('#undoBtn').addEventListener('click',()=>{count=Math.max(0,count-1); update();});
+    $('#resetBtn').addEventListener('click',()=>{ if(confirm('Reset to 0?')){count=0; update();}});
+
+    // share (text fallback)
+    $('#shareBtn').addEventListener('click', async ()=>{
+      const text = `Today I ate ${count} Pringle${count===1?'':'s'} — Calories: ${(count*CAL_PER).toFixed(1)} kcal; Sodium: ${(count*SOD_MG).toFixed(1)} mg`;
+      if(navigator.share){ try{ await navigator.share({title:'Pringle 1, 2, 3', text}); }catch{} }
+      else { try{ await navigator.clipboard.writeText(text); toast('Copied to clipboard.'); }catch{} }
+    });
+    function toast(msg){els.toast.textContent=msg; els.toast.classList.add('show'); setTimeout(()=>els.toast.classList.remove('show'),1500);}
+
+    // sound via WebAudio
+    let AC=null; document.addEventListener('pointerdown',()=>{ if(!AC){const C=window.AudioContext||window.webkitAudioContext; if(C) AC=new C();}}, {once:true});
+    function crunch(){ if(!AC) return; const t=AC.currentTime;
+      const makeNoise=(dur, f, Q, hp, peak, atk)=>{const N=Math.floor(AC.sampleRate*dur), buf=AC.createBuffer(1,N,AC.sampleRate), d=buf.getChannelData(0);
+        for(let i=0;i<N;i++){let v=(Math.random()*2-1)*1.25; d[i]=Math.max(-1,Math.min(1,v));}
+        const src=AC.createBufferSource(); src.buffer=buf; const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=Q;
+        const hpF=AC.createBiquadFilter(); hpF.type='highpass'; hpF.frequency.value=hp||600; const g=AC.createGain();
+        g.gain.setValueAtTime(0.001,t); g.gain.exponentialRampToValueAtTime(peak,t+(atk||0.01)); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+        src.connect(bp); bp.connect(hpF); hpF.connect(g); g.connect(AC.destination); src.start(t); src.stop(t+dur+0.02);};
+      makeNoise(0.16,2500,1.2,700,0.9,0.012); makeNoise(0.07,4200,1.8,0,0.6,0.006);
+      const osc=AC.createOscillator(); const g3=AC.createGain(); osc.type='triangle'; osc.frequency.setValueAtTime(3200,t);
+      g3.gain.setValueAtTime(0.001,t); g3.gain.exponentialRampToValueAtTime(0.2,t+0.003); g3.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+      osc.connect(g3); g3.connect(AC.destination); osc.start(t); osc.stop(t+0.06);
+    }
+
+    // confetti mini-pringles (simple circles for perf)
+    const ctx=els.fx.getContext('2d'); let parts=[]; const dpr=Math.max(1,window.devicePixelRatio||1);
+    function resize(){const r=els.app.getBoundingClientRect(); els.fx.width=Math.floor(r.width*dpr); els.fx.height=Math.floor(r.height*dpr);
+      els.fx.style.width=r.width+'px'; els.fx.style.height=r.height+'px'; ctx.setTransform(dpr,0,0,dpr,0,0);}
+    window.addEventListener('resize',resize); resize();
+    function confetti(){
+      const chip=els.chip.getBoundingClientRect(), box=els.app.getBoundingClientRect();
+      const ox=chip.left-box.left+chip.width/2, oy=chip.top-box.top+chip.height/2;
+      for(let i=0;i<100;i++){const a=Math.random()*Math.PI*2,s=3+Math.random()*4; parts.push({x:ox,y:oy,vx:Math.cos(a)*s,vy:Math.sin(a)*s-2,g:0.12,life:0,ttl:900+Math.random()*300});}
+      if(!window._raf) loop(performance.now());
+    }
+    function loop(prev){window._raf=requestAnimationFrame(t=>loop(t)); const dt=Math.min(32,performance.now()-prev); ctx.clearRect(0,0,els.fx.width/dpr,els.fx.height/dpr);
+      parts=parts.filter(p=>{p.life+=dt; if(p.life>p.ttl) return false; p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; ctx.fillStyle='#ffcc66'; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,6.283); ctx.fill(); return p.x>-40&&p.x<els.fx.width/dpr+40&&p.y<els.fx.height/dpr+60;});
+      if(parts.length===0){cancelAnimationFrame(window._raf); window._raf=0;}
+    }
+
+    // PWA install
+    let deferredPrompt=null;
+    window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); deferredPrompt=e; els.installBtn.hidden=false;});
+    els.installBtn.addEventListener('click', async ()=>{ if(!deferredPrompt) return; els.installBtn.hidden=true; deferredPrompt.prompt(); try{await deferredPrompt.userChoice;}catch{} deferredPrompt=null;});
+    window.addEventListener('load', ()=>{ if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js'); } });
+  </script>
+</body>
+</html>
