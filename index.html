@@ -14,7 +14,7 @@
     html,body{height:100%}
     body{
       margin:0; background:radial-gradient(1200px 1200px at 50% -200px,#1b1b1f 0,#0b0b0c 65%); color:var(--ink);
-      font:500 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      font:500 16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
       display:flex; align-items:center; justify-content:center; padding:22px;
     }
     .app{
@@ -47,15 +47,17 @@
     progress::-webkit-progress-bar{background:#1c1d23}
     progress::-webkit-progress-value{background:linear-gradient(90deg,var(--accent),var(--accent-2))}
     progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),var(--accent-2))}
-    .controls{display:flex; gap:10px; margin-top:10px; flex-wrap:wrap}
+    .controls{display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; align-items:center}
     button.ctrl{
       background:#1a1b21; color:#fff; border:1px solid #2c2d36; padding:10px 14px; border-radius:12px; cursor:pointer;
       font-weight:600; letter-spacing:.2px
     }
     button.ctrl:hover{border-color:#3a3b46}
     button.primary{background:var(--accent); color:#161616; border-color:#f2c35e}
-    footer{margin-top:10px; color:var(--muted); font-size:13px; text-align:center}
+    footer{margin-top:10px; color:#9a9aa0; font-size:13px; text-align:center}
     .tiny{font-size:12px;color:#a7a7a7}
+    #a2hsHint{display:none}
+    #a2hsHint.show{display:inline}
   </style>
 </head>
 <body>
@@ -100,6 +102,7 @@
         <button id="resetBtn" class="ctrl" type="button">Reset</button>
         <button id="installBtn" class="ctrl primary" type="button" hidden>Install App</button>
         <span class="tiny muted" id="savedMsg" aria-live="polite"></span>
+        <span id="a2hsHint" class="tiny">Tip: install requires HTTPS/localhost + valid icons.</span>
       </div>
     </section>
 
@@ -110,10 +113,10 @@
 
   <script>
     // --- Nutrition constants (per Pringle) ---
-    const CAL_PER   = 10.7;    // kcal
-    const CAL_PCT   = 0.54;    // % DV per chip
-    const SOD_MG    = 12.9;    // mg
-    const SOD_PCT   = 0.57;    // % DV per chip
+    const CAL_PER = 10.7;   // kcal
+    const CAL_PCT = 0.54;   // % DV per chip
+    const SOD_MG  = 12.9;   // mg
+    const SOD_PCT = 0.57;   // % DV per chip
 
     // --- State helpers ---
     const $ = s => document.querySelector(s);
@@ -126,6 +129,8 @@
       calProg: $('#calProg'),
       sodProg: $('#sodProg'),
       savedMsg:$('#savedMsg'),
+      installBtn: $('#installBtn'),
+      a2hsHint: $('#a2hsHint'),
     };
 
     let count = Number(localStorage.getItem('p123_count') || 0);
@@ -133,17 +138,14 @@
     function fmt(n, d=1){ return Number(n).toFixed(d); }
     function update(){
       els.count.textContent = count;
-
-      const cals = count * CAL_PER;
+      const cals   = count * CAL_PER;
       const calPct = count * CAL_PCT;
-      const sod  = count * SOD_MG;
+      const sod    = count * SOD_MG;
       const sodPct = count * SOD_PCT;
-
       els.calories.textContent = fmt(cals, 1);
-      els.calPct.textContent = fmt(calPct, 2) + '%';
-      els.sodium.textContent = fmt(sod, 1);
-      els.sodPct.textContent = fmt(sodPct, 2) + '%';
-
+      els.calPct.textContent   = fmt(calPct, 2) + '%';
+      els.sodium.textContent   = fmt(sod, 1);
+      els.sodPct.textContent   = fmt(sodPct, 2) + '%';
       els.calProg.value = Math.min(100, calPct);
       els.sodProg.value = Math.min(100, sodPct);
     }
@@ -153,64 +155,73 @@
       setTimeout(()=>els.savedMsg.textContent='', 900);
     }
 
-    // --- Interactions ---
+    // Interactions
     $('#chipBtn').addEventListener('click', () => {
-      count++;
-      if (navigator.vibrate) navigator.vibrate(12);
+      count++; if (navigator.vibrate) navigator.vibrate(12);
       update(); save();
     });
-
     $('#undoBtn').addEventListener('click', () => {
-      count = Math.max(0, count - 1);
-      update(); save();
+      count = Math.max(0, count - 1); update(); save();
     });
-
     $('#resetBtn').addEventListener('click', () => {
-      const ok = confirm('Reset today’s Pringles count to 0?');
-      if (!ok) return;
+      if (!confirm('Reset today’s Pringles count to 0?')) return;
       count = 0; update(); save();
     });
-
-    // Keyboard: Space/Enter adds one
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' || e.code === 'Enter'){
-        e.preventDefault();
-        $('#chipBtn').click();
-      }
+      if (e.code === 'Space' || e.code === 'Enter'){ e.preventDefault(); $('#chipBtn').click(); }
     });
-
     update();
 
-    // --- Manifest (inline, one-file) ---
-    (function injectManifest(){
-      const manifest = {
-        "name": "Pringle 1, 2, 3",
-        "short_name": "Pringle123",
-        "start_url": "./",
-        "display": "standalone",
-        "background_color": "#0b0b0c",
-        "theme_color": "#ffcc66",
-        "icons": [
-          {
-            "src": "./pringle.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "any maskable"
-          }
-        ]
-      };
-      const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
-      const link = document.createElement('link');
-      link.rel = 'manifest';
-      link.href = URL.createObjectURL(blob);
-      document.head.appendChild(link);
-    })();
+    // ---- Helper: generate PNG dataURL at a target size from pringle.png ----
+    async function genIconDataURL(src, size){
+      const img = new Image(); img.src = src; img.crossOrigin = 'anonymous';
+      await img.decode();
+      const c = document.createElement('canvas'); c.width = c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#0b0b0c'; ctx.fillRect(0,0,size,size); // background for maskable
+      // Fit image inside with max coverage
+      const scale = Math.min(size / img.width, size / img.height);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const x = Math.round((size - w)/2);
+      const y = Math.round((size - h)/2);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, x, y, w, h);
+      return c.toDataURL('image/png');
+    }
 
-    // --- Service Worker (inline) ---
-    (function registerSW(){
+    // ---- Manifest injection with valid 192 & 512 icons derived from pringle.png ----
+    async function injectManifestFromPringle(){
+      try{
+        const icon192 = await genIconDataURL('./pringle.png', 192);
+        const icon512 = await genIconDataURL('./pringle.png', 512);
+        const manifest = {
+          name: "Pringle 1, 2, 3",
+          short_name: "Pringle123",
+          start_url: "./",
+          display: "standalone",
+          background_color: "#0b0b0c",
+          theme_color: "#ffcc66",
+          icons: [
+            { src: icon192, sizes: "192x192", type: "image/png", purpose: "any maskable" },
+            { src: icon512, sizes: "512x512", type: "image/png", purpose: "any maskable" }
+          ]
+        };
+        const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = URL.createObjectURL(blob);
+        document.head.appendChild(link);
+      } catch(err){
+        console.warn('Manifest icon generation failed:', err);
+      }
+    }
+
+    // ---- Service Worker (inline) ----
+    function registerSW(){
       if(!('serviceWorker' in navigator)) return;
       const swCode = `
-        const CACHE = 'p123-v3';
+        const CACHE = 'p123-v4';
         const toCache = ['./', './pringle.png'];
         self.addEventListener('install', e => {
           e.waitUntil(caches.open(CACHE).then(c => c.addAll(toCache)));
@@ -223,31 +234,42 @@
           self.clients.claim();
         });
         self.addEventListener('fetch', e => {
-          const req = e.request;
           e.respondWith(
-            fetch(req).catch(() => caches.match(req).then(r => r || caches.match('./')))
+            fetch(e.request).catch(() => caches.match(e.request).then(r => r || caches.match('./')))
           );
         });
       `;
       const blob = new Blob([swCode], {type: 'text/javascript'});
       const swUrl = URL.createObjectURL(blob);
-      navigator.serviceWorker.register(swUrl);
-    })();
+      navigator.serviceWorker.register(swUrl).catch(e=>console.warn('SW register failed', e));
+    }
 
-    // --- Install (A2HS) button ---
-    let deferredPrompt;
-    const installBtn = document.getElementById('installBtn');
+    // ---- A2HS / Install flow ----
+    let deferredPrompt = null;
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      installBtn.hidden = false;
+      els.installBtn.hidden = false;
+      els.a2hsHint.classList.remove('show');
     });
-    installBtn.addEventListener('click', async () => {
-      installBtn.hidden = true;
+
+    els.installBtn.addEventListener('click', async () => {
+      els.installBtn.hidden = true;
       if (!deferredPrompt) return;
       deferredPrompt.prompt();
       try { await deferredPrompt.userChoice; } catch(_) {}
       deferredPrompt = null;
+    });
+
+    // Show a gentle hint if install criteria not met (no beforeinstallprompt after a bit)
+    setTimeout(() => {
+      if (!deferredPrompt) els.a2hsHint.classList.add('show');
+    }, 2000);
+
+    // Register SW and inject manifest after page fully loads (better for beforeinstallprompt)
+    window.addEventListener('load', async () => {
+      await injectManifestFromPringle();
+      registerSW();
     });
   </script>
 </body>
