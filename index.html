@@ -14,7 +14,7 @@
     html,body{height:100%}
     body{
       margin:0; background:radial-gradient(1200px 1200px at 50% -200px,#1b1b1f 0,#0b0b0c 65%); color:var(--ink);
-      font:500 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      font:500 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       display:flex; align-items:center; justify-content:center; padding:22px;
     }
     .app{
@@ -30,7 +30,7 @@
       touch-action:manipulation; -webkit-tap-highlight-color: transparent;
     }
     .chip-btn:active{transform:scale(.975) rotate(-.3deg)}
-    .chip{width:min(78vw,420px); filter:var(--chip-shadow)}
+    .chip{width:min(78vw,420px); filter:var(--chip-shadow); display:block}
     .stats{margin:6px 2px 10px; display:grid; gap:8px}
     .card{
       background:#0e0f12; border:1px solid #23242c; border-radius:16px; padding:12px 14px;
@@ -67,35 +67,7 @@
 
     <div class="chip-wrap">
       <button id="chipBtn" class="chip-btn" aria-label="Add one Pringle" title="Tap to add one">
-        <!-- Inline SVG 'Pringle' (stylized) -->
-        <svg class="chip" viewBox="0 0 830 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pringle chip">
-          <defs>
-            <radialGradient id="g" cx="34%" cy="22%" r="78%">
-              <stop offset="0" stop-color="#ffe49b"/>
-              <stop offset=".45" stop-color="#ffd36e"/>
-              <stop offset="1" stop-color="#f6b74c"/>
-            </radialGradient>
-            <filter id="b" x="-30%" y="-30%" width="160%" height="160%">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="1.25"/>
-            </filter>
-          </defs>
-          <path d="M34,300
-                   C 120,160 300,60 505,92
-                   C 640,114 780,210 800,305
-                   C 816,384 748,458 602,438
-                   C 430,414 285,320 176,328
-                   C 86,334 36,362 28,420
-                   C 22,465 4,468 6,430
-                   C 10,360 16,340 34,300Z"
-                fill="url(#g)"/>
-          <path d="M36,300
-                   C 120,156 302,58 508,90
-                   C 642,112 782,208 802,304
-                   C 820,386 744,462 602,442
-                   C 432,418 281,320 174,330
-                   C 82,338 30,372 28,420"
-                fill="none" stroke="#f3a93b" stroke-opacity=".35" stroke-width="12" filter="url(#b)"/>
-        </svg>
+        <img src="pringle.png" class="chip" alt="Pringle chip" />
       </button>
     </div>
 
@@ -138,12 +110,12 @@
 
   <script>
     // --- Nutrition constants (per Pringle) ---
-    const CAL_PER   = 10.7;      // kcal
-    const CAL_PCT   = 0.54;      // % Daily Value (per chip)
-    const SOD_MG    = 12.9;      // mg
-    const SOD_PCT   = 0.57;      // % DV (per chip)
+    const CAL_PER   = 10.7;    // kcal
+    const CAL_PCT   = 0.54;    // % DV per chip
+    const SOD_MG    = 12.9;    // mg
+    const SOD_PCT   = 0.57;    // % DV per chip
 
-    // --- State ---
+    // --- State helpers ---
     const $ = s => document.querySelector(s);
     const els = {
       count:   $('#count'),
@@ -211,17 +183,6 @@
 
     // --- Manifest (inline, one-file) ---
     (function injectManifest(){
-      const svgIcon = encodeURIComponent(`
-        <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>
-          <rect width='512' height='512' rx='100' fill='#0b0b0c'/>
-          <g transform='translate(36,70)'>
-            <defs><radialGradient id='g' cx='35%' cy='22%' r='80%'>
-              <stop offset='0' stop-color='#ffe49b'/><stop offset='.45' stop-color='#ffd36e'/>
-              <stop offset='1' stop-color='#f6b74c'/></radialGradient></defs>
-            <path d='M6,210 C60,120 200,40 360,64 C430,75 500,132 510,190 C518,236 474,282 388,272 C286,260 194,204 128,208 C82,210 54,228 50,260 C48,280 36,284 36,262 C38,234 42,222 52,202Z'
-                  fill='url(#g)'/>
-          </g>
-        </svg>`);
       const manifest = {
         "name": "Pringle 1, 2, 3",
         "short_name": "Pringle123",
@@ -230,7 +191,12 @@
         "background_color": "#0b0b0c",
         "theme_color": "#ffcc66",
         "icons": [
-          {"src": "data:image/svg+xml;utf8,"+svgIcon, "sizes": "512x512", "type": "image/svg+xml", "purpose":"any maskable"}
+          {
+            "src": "./pringle.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+          }
         ]
       };
       const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
@@ -244,8 +210,8 @@
     (function registerSW(){
       if(!('serviceWorker' in navigator)) return;
       const swCode = `
-        const CACHE = 'p123-v1';
-        const toCache = ['./'];
+        const CACHE = 'p123-v3';
+        const toCache = ['./', './pringle.png'];
         self.addEventListener('install', e => {
           e.waitUntil(caches.open(CACHE).then(c => c.addAll(toCache)));
           self.skipWaiting();
