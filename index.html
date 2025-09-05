@@ -9,6 +9,7 @@
     :root{
       --bg:#0b0b0c; --panel:#151518; --ink:#fafafa; --muted:#bdbdbd; --accent:#ffcc66; --accent-2:#ffd991;
       --chip-shadow: drop-shadow(0 14px 22px rgba(0,0,0,.55)) drop-shadow(0 2px 4px rgba(0,0,0,.35));
+      --ok:#7bffb5;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -18,8 +19,8 @@
       display:flex; align-items:center; justify-content:center; padding:22px;
     }
     .app{
-      width:min(780px,100%); background:var(--panel); border:1px solid #22232a; border-radius:22px; padding:20px 18px 16px;
-      box-shadow: 0 30px 80px rgba(0,0,0,.45);
+      width:min(820px,100%); background:var(--panel); border:1px solid #22232a; border-radius:22px; padding:20px 18px 16px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.45); position:relative; overflow:hidden;
     }
     header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px}
     h1{margin:0; font-size:22px; letter-spacing:.2px}
@@ -27,10 +28,12 @@
     .chip-wrap{display:grid; place-items:center; padding:10px 0 2px}
     .chip-btn{
       appearance:none; background:none; border:0; cursor:pointer; padding:0; transition:transform .08s ease-out;
-      touch-action:manipulation; -webkit-tap-highlight-color: transparent;
+      touch-action:manipulation; -webkit-tap-highlight-color: transparent; position:relative;
     }
-    .chip-btn:active{transform:scale(.975) rotate(-.3deg)}
-    .chip{width:min(78vw,420px); filter:var(--chip-shadow); display:block}
+    .chip{width:min(78vw,420px); filter:var(--chip-shadow); display:block; will-change:transform}
+    /* Crunch pop */
+    .pop{animation:pop .14s ease-out}
+    @keyframes pop{0%{transform:scale(1)}70%{transform:scale(0.94) rotate(-1deg)}100%{transform:scale(1)}}
     .stats{margin:6px 2px 10px; display:grid; gap:8px}
     .card{
       background:#0e0f12; border:1px solid #23242c; border-radius:16px; padding:12px 14px;
@@ -56,8 +59,16 @@
     button.primary{background:var(--accent); color:#161616; border-color:#f2c35e}
     footer{margin-top:10px; color:#9a9aa0; font-size:13px; text-align:center}
     .tiny{font-size:12px;color:#a7a7a7}
-    #a2hsHint{display:none}
-    #a2hsHint.show{display:inline}
+
+    /* Toast + badges */
+    .toast{
+      position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+      background:#121317; border:1px solid #2b2c34; color:#e7ffe7; padding:10px 14px; border-radius:12px; 
+      box-shadow:0 12px 30px rgba(0,0,0,.4); display:none; z-index:10;
+    }
+    .toast.show{display:block; animation:fade .3s ease-out}
+    @keyframes fade{from{opacity:0; transform:translate(-50%,8px)} to{opacity:1; transform:translate(-50%,0)}}
+    .badge{color:var(--ok); font-weight:700}
   </style>
 </head>
 <body>
@@ -74,7 +85,7 @@
     </div>
 
     <section class="stats">
-      <div class="card">
+      <div class="card" id="card">
         <div class="row">
           <div>Pringles eaten</div>
           <strong id="count">0</strong>
@@ -100,15 +111,23 @@
       <div class="controls">
         <button id="undoBtn" class="ctrl" type="button">−1</button>
         <button id="resetBtn" class="ctrl" type="button">Reset</button>
+        <button id="shareBtn" class="ctrl" type="button">Share</button>
         <button id="installBtn" class="ctrl primary" type="button" hidden>Install App</button>
         <span class="tiny muted" id="savedMsg" aria-live="polite"></span>
-        <span id="a2hsHint" class="tiny">Tip: install requires HTTPS/localhost + valid icons.</span>
+        <span id="a2hsHint" class="tiny" style="display:none">Tip: install requires HTTPS/localhost + valid icons.</span>
       </div>
     </section>
 
     <footer>
       Works offline. Progress is saved automatically.
     </footer>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- tiny inline crunch sound (44byte PCM WAV, base64) -->
+    <audio id="snd" preload="auto">
+      <source src="data:audio/wav;base64,UklGRhQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAABkAAAAPwAAAP8AAP//AAC/AAAAAP//AA==" type="audio/wav">
+    </audio>
   </div>
 
   <script>
@@ -117,6 +136,15 @@
     const CAL_PCT = 0.54;   // % DV per chip
     const SOD_MG  = 12.9;   // mg
     const SOD_PCT = 0.57;   // % DV per chip
+
+    // Achievements (threshold: name)
+    const BADGES = [
+      [20, 'First Stack'],
+      [42, 'Life, the Universe & Pringles'],
+      [63, 'Party Bowl'],
+      [84, 'Tube Conqueror'],
+      [100,'Century Crunch']
+    ];
 
     // --- State helpers ---
     const $ = s => document.querySelector(s);
@@ -131,9 +159,39 @@
       savedMsg:$('#savedMsg'),
       installBtn: $('#installBtn'),
       a2hsHint: $('#a2hsHint'),
+      toast: $('#toast'),
+      chipImg: document.querySelector('.chip'),
+      snd: $('#snd'),
     };
 
+    // persistent state
     let count = Number(localStorage.getItem('p123_count') || 0);
+    let lastDate = localStorage.getItem('p123_date') || todayKey();
+    let unlocked = new Set(JSON.parse(localStorage.getItem('p123_badges') || '[]'));
+
+    function todayKey(){
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    // Daily reset if date changed (also schedule next midnight tick)
+    function ensureToday(){
+      const tk = todayKey();
+      if (tk !== lastDate){
+        count = 0;
+        lastDate = tk;
+        save();
+      }
+      scheduleMidnightReset();
+    }
+    function scheduleMidnightReset(){
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24,0,0,0);
+      const ms = midnight - now;
+      clearTimeout(window._midnightTimer);
+      window._midnightTimer = setTimeout(()=>{ count = 0; lastDate = todayKey(); save(); update(); toast('New day — counter reset.'); scheduleMidnightReset(); }, ms);
+    }
 
     function fmt(n, d=1){ return Number(n).toFixed(d); }
     function update(){
@@ -151,17 +209,32 @@
     }
     function save(){
       localStorage.setItem('p123_count', String(count));
+      localStorage.setItem('p123_date', lastDate);
+      localStorage.setItem('p123_badges', JSON.stringify([...unlocked]));
       els.savedMsg.textContent = 'Saved';
       setTimeout(()=>els.savedMsg.textContent='', 900);
+    }
+    function toast(msg){ els.toast.textContent = msg; els.toast.classList.add('show'); setTimeout(()=>els.toast.classList.remove('show'), 2000); }
+
+    function checkBadges(prev, now){
+      for(const [n, name] of BADGES){
+        if(now >= n && prev < n && !unlocked.has(n)){
+          unlocked.add(n);
+          toast(`🏅 <span class="badge">${name}</span> unlocked (${n})`);
+        }
+      }
     }
 
     // Interactions
     $('#chipBtn').addEventListener('click', () => {
+      const prev = count;
       count++; if (navigator.vibrate) navigator.vibrate(12);
-      update(); save();
+      els.chipImg.classList.remove('pop'); void els.chipImg.offsetWidth; els.chipImg.classList.add('pop');
+      try{ els.snd.currentTime = 0; els.snd.play().catch(()=>{});}catch{}
+      update(); checkBadges(prev, count); save();
     });
     $('#undoBtn').addEventListener('click', () => {
-      count = Math.max(0, count - 1); update(); save();
+      const prev = count; count = Math.max(0, count - 1); update(); save();
     });
     $('#resetBtn').addEventListener('click', () => {
       if (!confirm('Reset today’s Pringles count to 0?')) return;
@@ -170,16 +243,79 @@
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space' || e.code === 'Enter'){ e.preventDefault(); $('#chipBtn').click(); }
     });
-    update();
 
-    // ---- Helper: generate PNG dataURL at a target size from pringle.png ----
+    // --- Share: create PNG card and share (fallback to download or text) ---
+    $('#shareBtn').addEventListener('click', async () => {
+      const d = new Date();
+      const title = `Pringle 1, 2, 3 — ${d.toLocaleDateString()}`;
+      const text = `Today I ate ${count} Pringle${count===1?'':'s'}.\nCalories: ${fmt(count*CAL_PER,1)} kcal (${fmt(count*CAL_PCT,2)}%)\nSodium: ${fmt(count*SOD_MG,1)} mg (${fmt(count*SOD_PCT,2)}%)`;
+
+      // Build a share image on canvas
+      const pngBlob = await buildShareCard(title);
+
+      if (navigator.canShare && navigator.canShare({ files: [new File([pngBlob], 'pringles.png', {type:'image/png'})] })){
+        await navigator.share({
+          title, text,
+          files: [new File([pngBlob], 'pringles.png', {type:'image/png'})]
+        }).catch(()=>{});
+      } else if (navigator.share){
+        await navigator.share({ title, text }).catch(()=>{});
+        // also offer download for the image
+        downloadBlob(pngBlob, 'pringle-summary.png');
+      } else {
+        // Fallback: download image + copy text
+        downloadBlob(pngBlob, 'pringle-summary.png');
+        try{ await navigator.clipboard.writeText(text); toast('Summary copied to clipboard.'); }catch{}
+      }
+    });
+
+    async function buildShareCard(title){
+      const w = 1200, h = 630;
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      // bg
+      const g = ctx.createLinearGradient(0,0,0,h);
+      g.addColorStop(0,'#151518'); g.addColorStop(1,'#0b0b0c');
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+
+      // card panel
+      ctx.fillStyle = '#0e0f12'; roundRect(ctx, 48, 48, w-96, h-96, 28); ctx.fill();
+      ctx.strokeStyle = '#23242c'; ctx.lineWidth = 2; ctx.stroke();
+
+      // title
+      ctx.fillStyle = '#fafafa'; ctx.font = '700 44px system-ui, Segoe UI, Roboto'; ctx.fillText(title, 72, 110);
+
+      // chip image
+      const chip = await loadImage('./pringle.png');
+      const chipW = 420, chipH = chip.height * (chipW / chip.width);
+      ctx.drawImage(chip, 72, 140, chipW, chipH);
+
+      // stats
+      ctx.font = '600 32px system-ui, Segoe UI, Roboto';
+      ctx.fillText(`Pringles: ${count}`, 72, 140 + chipH + 60);
+      ctx.fillStyle = '#ffd991';
+      ctx.font = '600 28px system-ui, Segoe UI, Roboto';
+      ctx.fillText(`Calories: ${fmt(count*CAL_PER,1)} kcal  (${fmt(count*CAL_PCT,2)}%)`, 72, 140 + chipH + 110);
+      ctx.fillText(`Sodium: ${fmt(count*SOD_MG,1)} mg  (${fmt(count*SOD_PCT,2)}%)`, 72, 140 + chipH + 150);
+
+      return await new Promise(res => c.toBlob(res, 'image/png'));
+    }
+    function roundRect(ctx, x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+    function loadImage(src){ return new Promise((ok,err)=>{ const im=new Image(); im.onload=()=>ok(im); im.onerror=err; im.src=src; }); }
+    function downloadBlob(blob, filename){
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+    }
+
+    // Init
+    ensureToday(); update();
+
+    // ---- Manifest injection with valid 192 & 512 icons derived from pringle.png ----
     async function genIconDataURL(src, size){
-      const img = new Image(); img.src = src; img.crossOrigin = 'anonymous';
-      await img.decode();
+      const img = await loadImage(src);
       const c = document.createElement('canvas'); c.width = c.height = size;
       const ctx = c.getContext('2d');
-      ctx.fillStyle = '#0b0b0c'; ctx.fillRect(0,0,size,size); // background for maskable
-      // Fit image inside with max coverage
+      ctx.fillStyle = '#0b0b0c'; ctx.fillRect(0,0,size,size);
       const scale = Math.min(size / img.width, size / img.height);
       const w = Math.round(img.width * scale);
       const h = Math.round(img.height * scale);
@@ -189,8 +325,6 @@
       ctx.drawImage(img, x, y, w, h);
       return c.toDataURL('image/png');
     }
-
-    // ---- Manifest injection with valid 192 & 512 icons derived from pringle.png ----
     async function injectManifestFromPringle(){
       try{
         const icon192 = await genIconDataURL('./pringle.png', 192);
@@ -221,7 +355,7 @@
     function registerSW(){
       if(!('serviceWorker' in navigator)) return;
       const swCode = `
-        const CACHE = 'p123-v4';
+        const CACHE = 'p123-v5';
         const toCache = ['./', './pringle.png'];
         self.addEventListener('install', e => {
           e.waitUntil(caches.open(CACHE).then(c => c.addAll(toCache)));
@@ -250,23 +384,18 @@
       e.preventDefault();
       deferredPrompt = e;
       els.installBtn.hidden = false;
-      els.a2hsHint.classList.remove('show');
+      els.a2hsHint.style.display = 'none';
     });
-
-    els.installBtn.addEventListener('click', async () => {
-      els.installBtn.hidden = true;
+    $('#installBtn').addEventListener('click', async () => {
       if (!deferredPrompt) return;
+      els.installBtn.hidden = true;
       deferredPrompt.prompt();
       try { await deferredPrompt.userChoice; } catch(_) {}
       deferredPrompt = null;
     });
+    setTimeout(() => { if (!deferredPrompt) els.a2hsHint.style.display = 'inline'; }, 2000);
 
-    // Show a gentle hint if install criteria not met (no beforeinstallprompt after a bit)
-    setTimeout(() => {
-      if (!deferredPrompt) els.a2hsHint.classList.add('show');
-    }, 2000);
-
-    // Register SW and inject manifest after page fully loads (better for beforeinstallprompt)
+    // Register SW + manifest on load
     window.addEventListener('load', async () => {
       await injectManifestFromPringle();
       registerSW();
