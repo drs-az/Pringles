@@ -34,6 +34,8 @@
     button.primary{background:var(--accent);color:#161616;border-color:#f2c35e}
     footer{margin-top:10px;color:#9a9aa0;font-size:13px;text-align:center}
     .tiny{font-size:12px;color:#a7a7a7}
+    .badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+    .badge{background:#1a1b21;border:1px solid #2c2d36;border-radius:8px;padding:4px 8px;font-size:14px}
     /* FULL-SCREEN confetti canvas */
     #fxCanvas{position:fixed;inset:0;pointer-events:none;z-index:5}
     .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#121317;border:1px solid #2b2c34;
@@ -61,6 +63,10 @@
         <div>Calories (10.7 each): <strong id="calories">0.0</strong> kcal</div>
         <div>Sodium (12.9 mg each): <strong id="sodium">0.0</strong> mg</div>
       </div>
+      <div class="card" id="badgesCard" hidden>
+        <div>Badges unlocked:</div>
+        <div class="badges" id="badges"></div>
+      </div>
       <div class="controls">
         <button id="undoBtn" class="ctrl">−1</button>
         <button id="resetBtn" class="ctrl">Reset</button>
@@ -79,18 +85,48 @@
     const CAL_PER=10.7, SOD_MG=12.9;
     const $=s=>document.querySelector(s);
     const els={count:$('#count'),cal:$('#calories'),sod:$('#sodium'),chip:$('.chip'),
-      installBtn:$('#installBtn'),toast:$('#toast'),hint:$('#hint')};
+      installBtn:$('#installBtn'),toast:$('#toast'),hint:$('#hint'),
+      badges:$('#badges'),badgesCard:$('#badgesCard')};
 
     // state
     let count=Number(localStorage.getItem('p123_count')||0);
+    let badges=JSON.parse(localStorage.getItem('p123_badges')||'[]');
     function update(){els.count.textContent=count; els.cal.textContent=(count*CAL_PER).toFixed(1);
       els.sod.textContent=(count*SOD_MG).toFixed(1); localStorage.setItem('p123_count',String(count));}
-    update();
+    function renderBadges(){ if(badges.length===0){els.badgesCard.hidden=true; return;}
+      els.badgesCard.hidden=false;
+      els.badges.innerHTML=badges.map(b=>`<span class="badge">${b}</span>`).join(''); }
+    update(); renderBadges();
+
+    const quips=[
+      "Your dedication to crunch is alarming.",
+      "Hope you brought napkins.",
+      "The potato gods salute you.",
+      "Sodium? Never heard of her.",
+      "You're the reason the can has a warning label."
+    ];
+    function celebrate(){
+      if(count===84 && !badges.includes('Can Crusher')){
+        badges.push('Can Crusher');
+        localStorage.setItem('p123_badges',JSON.stringify(badges));
+        renderBadges();
+        toast('🛢️ Can Crusher! 84 chips — an entire can annihilated!');
+      } else if(count>0 && count%10===0){
+        const label=`${count} chips`;
+        if(!badges.includes(label)){
+          badges.push(label);
+          localStorage.setItem('p123_badges',JSON.stringify(badges));
+          renderBadges();
+          const quip=quips[Math.floor(Math.random()*quips.length)];
+          toast(`🎖️ ${label}! ${quip}`);
+        }
+      }
+    }
 
     // interactions
-    $('#chipBtn').addEventListener('click',()=>{count++; update(); crunch(); spawnConfetti();});
+    $('#chipBtn').addEventListener('click',()=>{count++; update(); crunch(); spawnConfetti(); celebrate();});
     $('#undoBtn').addEventListener('click',()=>{count=Math.max(0,count-1); update();});
-    $('#resetBtn').addEventListener('click',()=>{ if(confirm('Reset to 0?')){count=0; update();}});
+    $('#resetBtn').addEventListener('click',()=>{ if(confirm('Reset to 0?')){count=0; update(); badges=[]; localStorage.removeItem('p123_badges'); renderBadges();}});
 
     // share (text fallback)
     $('#shareBtn').addEventListener('click', async ()=>{
