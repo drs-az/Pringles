@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#ffcc66" />
+  <title>Pringle 1, 2, 3</title>
+  <style>
+    :root{
+      --bg:#0b0b0c; --panel:#151518; --ink:#fafafa; --muted:#bdbdbd; --accent:#ffcc66; --accent-2:#ffd991;
+      --chip-shadow: drop-shadow(0 14px 22px rgba(0,0,0,.55)) drop-shadow(0 2px 4px rgba(0,0,0,.35));
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:radial-gradient(1200px 1200px at 50% -200px,#1b1b1f 0,#0b0b0c 65%); color:var(--ink);
+      font:500 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      display:flex; align-items:center; justify-content:center; padding:22px;
+    }
+    .app{
+      width:min(780px,100%); background:var(--panel); border:1px solid #22232a; border-radius:22px; padding:20px 18px 16px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.45);
+    }
+    header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px}
+    h1{margin:0; font-size:22px; letter-spacing:.2px}
+    .muted{color:var(--muted)}
+    .chip-wrap{display:grid; place-items:center; padding:10px 0 2px}
+    .chip-btn{
+      appearance:none; background:none; border:0; cursor:pointer; padding:0; transition:transform .08s ease-out;
+      touch-action:manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    .chip-btn:active{transform:scale(.975) rotate(-.3deg)}
+    .chip{width:min(78vw,420px); filter:var(--chip-shadow)}
+    .stats{margin:6px 2px 10px; display:grid; gap:8px}
+    .card{
+      background:#0e0f12; border:1px solid #23242c; border-radius:16px; padding:12px 14px;
+      display:grid; gap:8px;
+    }
+    .row{display:flex; align-items:center; justify-content:space-between; gap:10px}
+    .row strong{font-size:22px}
+    .metric{display:grid; gap:6px}
+    .label{display:flex; align-items:center; justify-content:space-between}
+    .label span:last-child{font-variant-numeric: tabular-nums}
+    progress{
+      width:100%; height:10px; border:0; border-radius:999px; background:#1c1d23; overflow:hidden;
+    }
+    progress::-webkit-progress-bar{background:#1c1d23}
+    progress::-webkit-progress-value{background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+    progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+    .controls{display:flex; gap:10px; margin-top:10px; flex-wrap:wrap}
+    button.ctrl{
+      background:#1a1b21; color:#fff; border:1px solid #2c2d36; padding:10px 14px; border-radius:12px; cursor:pointer;
+      font-weight:600; letter-spacing:.2px
+    }
+    button.ctrl:hover{border-color:#3a3b46}
+    button.primary{background:var(--accent); color:#161616; border-color:#f2c35e}
+    footer{margin-top:10px; color:var(--muted); font-size:13px; text-align:center}
+    .tiny{font-size:12px;color:#a7a7a7}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Pringle 1, 2, 3</h1>
+      <div class="muted tiny">Tap the chip to add one</div>
+    </header>
+
+    <div class="chip-wrap">
+      <button id="chipBtn" class="chip-btn" aria-label="Add one Pringle" title="Tap to add one">
+        <!-- Inline SVG 'Pringle' (stylized) -->
+        <svg class="chip" viewBox="0 0 830 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pringle chip">
+          <defs>
+            <radialGradient id="g" cx="34%" cy="22%" r="78%">
+              <stop offset="0" stop-color="#ffe49b"/>
+              <stop offset=".45" stop-color="#ffd36e"/>
+              <stop offset="1" stop-color="#f6b74c"/>
+            </radialGradient>
+            <filter id="b" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="1.25"/>
+            </filter>
+          </defs>
+          <path d="M34,300
+                   C 120,160 300,60 505,92
+                   C 640,114 780,210 800,305
+                   C 816,384 748,458 602,438
+                   C 430,414 285,320 176,328
+                   C 86,334 36,362 28,420
+                   C 22,465 4,468 6,430
+                   C 10,360 16,340 34,300Z"
+                fill="url(#g)"/>
+          <path d="M36,300
+                   C 120,156 302,58 508,90
+                   C 642,112 782,208 802,304
+                   C 820,386 744,462 602,442
+                   C 432,418 281,320 174,330
+                   C 82,338 30,372 28,420"
+                fill="none" stroke="#f3a93b" stroke-opacity=".35" stroke-width="12" filter="url(#b)"/>
+        </svg>
+      </button>
+    </div>
+
+    <section class="stats">
+      <div class="card">
+        <div class="row">
+          <div>Pringles eaten</div>
+          <strong id="count">0</strong>
+        </div>
+
+        <div class="metric">
+          <div class="label">
+            <div>Calories <span class="tiny">(10.7 each)</span></div>
+            <span><strong id="calories">0.0</strong> kcal • <span id="calPct">0.00%</span></span>
+          </div>
+          <progress id="calProg" max="100" value="0"></progress>
+        </div>
+
+        <div class="metric">
+          <div class="label">
+            <div>Sodium <span class="tiny">(12.9 mg each)</span></div>
+            <span><strong id="sodium">0.0</strong> mg • <span id="sodPct">0.00%</span></span>
+          </div>
+          <progress id="sodProg" max="100" value="0"></progress>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="undoBtn" class="ctrl" type="button">−1</button>
+        <button id="resetBtn" class="ctrl" type="button">Reset</button>
+        <button id="installBtn" class="ctrl primary" type="button" hidden>Install App</button>
+        <span class="tiny muted" id="savedMsg" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <footer>
+      Works offline. Progress is saved automatically.
+    </footer>
+  </div>
+
+  <script>
+    // --- Nutrition constants (per Pringle) ---
+    const CAL_PER   = 10.7;      // kcal
+    const CAL_PCT   = 0.54;      // % Daily Value (per chip)
+    const SOD_MG    = 12.9;      // mg
+    const SOD_PCT   = 0.57;      // % DV (per chip)
+
+    // --- State ---
+    const $ = s => document.querySelector(s);
+    const els = {
+      count:   $('#count'),
+      calories:$('#calories'),
+      calPct:  $('#calPct'),
+      sodium:  $('#sodium'),
+      sodPct:  $('#sodPct'),
+      calProg: $('#calProg'),
+      sodProg: $('#sodProg'),
+      savedMsg:$('#savedMsg'),
+    };
+
+    let count = Number(localStorage.getItem('p123_count') || 0);
+
+    function fmt(n, d=1){ return Number(n).toFixed(d); }
+    function update(){
+      els.count.textContent = count;
+
+      const cals = count * CAL_PER;
+      const calPct = count * CAL_PCT;
+      const sod  = count * SOD_MG;
+      const sodPct = count * SOD_PCT;
+
+      els.calories.textContent = fmt(cals, 1);
+      els.calPct.textContent = fmt(calPct, 2) + '%';
+      els.sodium.textContent = fmt(sod, 1);
+      els.sodPct.textContent = fmt(sodPct, 2) + '%';
+
+      els.calProg.value = Math.min(100, calPct);
+      els.sodProg.value = Math.min(100, sodPct);
+    }
+    function save(){
+      localStorage.setItem('p123_count', String(count));
+      els.savedMsg.textContent = 'Saved';
+      setTimeout(()=>els.savedMsg.textContent='', 900);
+    }
+
+    // --- Interactions ---
+    $('#chipBtn').addEventListener('click', () => {
+      count++;
+      if (navigator.vibrate) navigator.vibrate(12);
+      update(); save();
+    });
+
+    $('#undoBtn').addEventListener('click', () => {
+      count = Math.max(0, count - 1);
+      update(); save();
+    });
+
+    $('#resetBtn').addEventListener('click', () => {
+      const ok = confirm('Reset today’s Pringles count to 0?');
+      if (!ok) return;
+      count = 0; update(); save();
+    });
+
+    // Keyboard: Space/Enter adds one
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'Enter'){
+        e.preventDefault();
+        $('#chipBtn').click();
+      }
+    });
+
+    update();
+
+    // --- Manifest (inline, one-file) ---
+    (function injectManifest(){
+      const svgIcon = encodeURIComponent(`
+        <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>
+          <rect width='512' height='512' rx='100' fill='#0b0b0c'/>
+          <g transform='translate(36,70)'>
+            <defs><radialGradient id='g' cx='35%' cy='22%' r='80%'>
+              <stop offset='0' stop-color='#ffe49b'/><stop offset='.45' stop-color='#ffd36e'/>
+              <stop offset='1' stop-color='#f6b74c'/></radialGradient></defs>
+            <path d='M6,210 C60,120 200,40 360,64 C430,75 500,132 510,190 C518,236 474,282 388,272 C286,260 194,204 128,208 C82,210 54,228 50,260 C48,280 36,284 36,262 C38,234 42,222 52,202Z'
+                  fill='url(#g)'/>
+          </g>
+        </svg>`);
+      const manifest = {
+        "name": "Pringle 1, 2, 3",
+        "short_name": "Pringle123",
+        "start_url": "./",
+        "display": "standalone",
+        "background_color": "#0b0b0c",
+        "theme_color": "#ffcc66",
+        "icons": [
+          {"src": "data:image/svg+xml;utf8,"+svgIcon, "sizes": "512x512", "type": "image/svg+xml", "purpose":"any maskable"}
+        ]
+      };
+      const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = URL.createObjectURL(blob);
+      document.head.appendChild(link);
+    })();
+
+    // --- Service Worker (inline) ---
+    (function registerSW(){
+      if(!('serviceWorker' in navigator)) return;
+      const swCode = `
+        const CACHE = 'p123-v1';
+        const toCache = ['./'];
+        self.addEventListener('install', e => {
+          e.waitUntil(caches.open(CACHE).then(c => c.addAll(toCache)));
+          self.skipWaiting();
+        });
+        self.addEventListener('activate', e => {
+          e.waitUntil(
+            caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+          );
+          self.clients.claim();
+        });
+        self.addEventListener('fetch', e => {
+          const req = e.request;
+          e.respondWith(
+            fetch(req).catch(() => caches.match(req).then(r => r || caches.match('./')))
+          );
+        });
+      `;
+      const blob = new Blob([swCode], {type: 'text/javascript'});
+      const swUrl = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swUrl);
+    })();
+
+    // --- Install (A2HS) button ---
+    let deferredPrompt;
+    const installBtn = document.getElementById('installBtn');
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.hidden = false;
+    });
+    installBtn.addEventListener('click', async () => {
+      installBtn.hidden = true;
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      try { await deferredPrompt.userChoice; } catch(_) {}
+      deferredPrompt = null;
+    });
+  </script>
+</body>
+</html>
